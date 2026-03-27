@@ -33,6 +33,9 @@ char empfangsString[5];
 char collectBuffer[20];  // Buffer zum Sammeln mehrerer Interrupts
 int collectCount = 0;
 unsigned long lastReceiveTime = 0;
+unsigned long lastValidMessageTime = 0;  // Zeitpunkt der letzten gültigen Nachricht (Alarm oder "nixx")
+bool timeoutAlarmSent = false;  // Flag, ob Timeout-Alarm bereits gesendet wurde
+const unsigned long MESSAGE_TIMEOUT = 5000;  // 5 Sekunden Timeout
 
 // RFM12 Funktionen
 uint16_t rfm12_trans(uint16_t wert);
@@ -127,7 +130,11 @@ void setup() {
   rfm12_reset_fifo();
   rfm12_trans(0x82D9);  // Enable Receiver
   
+  // Initialisiere Heartbeat-Timer
+  lastValidMessageTime = millis();
+  
   Serial.println("✓ Bereit! Warte auf Daten...");
+  Serial.println("  Heartbeat-Überwachung aktiv (Timeout: 5s)");
   Serial.println();
 }
 
@@ -155,13 +162,22 @@ void loop() {
       
       lastReceiveTime = millis();
       
+      // Sicherheit: Wenn zu viele Bytes im Buffer (mehr als 16), zurücksetzen
+      if (collectCount > 16) {
+        Serial.println("⚠ Buffer-Overflow! Zurücksetzen...");
+        collectCount = 0;
+        rfm12_reset_fifo();
+        rfm12_trans(0x82D9);  // Enable Receiver
+      }
+      
       // FIFO reset nur wenn wir fertig sind (nach Timeout)
       // NICHT sofort nach jedem Interrupt!
     }
   }
   
-  // Wenn 100ms nichts mehr kam, zeige gesammelte Daten  
-  if (collectCount > 0 && (millis() - lastReceiveTime) > 100) {
+  // Wenn 50ms nichts mehr kam UND mindestens 4 Bytes vorhanden, verarbeite Daten
+  if (collectCount >= 4 && (millis() - lastReceiveTime) > 50) {
+    
     Serial.print("✓ Empfangen (");
     Serial.print(collectCount);
     Serial.print(" Bytes): ");
@@ -183,33 +199,49 @@ void loop() {
     }
     Serial.println("\"");
     
-    // Suche nach bekannten 4-Byte Alarmmeldungen
+    // Suche nach bekannten 4-Byte Mustern im GESAMTEN Buffer (nicht nur an 4-Byte Grenzen!)
     bool alarmFound = false;
+    bool heartbeatFound = false;
     char alarmCode[5] = {0};
+    int patternPosition = -1;  // Position des gefundenen Musters
     
+    // Durchsuche ALLE Positionen im Buffer
     for (int i = 0; i <= collectCount - 4; i++) {
+      // nixx - Heartbeat/Lebenszeichen
+      if (collectBuffer[i] == 'n' && collectBuffer[i+1] == 'i' && collectBuffer[i+2] == 'x' && collectBuffer[i+3] == 'x') {
+        heartbeatFound = true;
+        patternPosition = i;
+        lastValidMessageTime = millis();
+        timeoutAlarmSent = false;  // Reset Timeout-Flag
+        Serial.println("  ↻ Heartbeat empfangen (nixx)");
+        break;  // Heartbeat gefunden, fertig
+      }
       // ALVO - Alarm Vorne
-      if (collectBuffer[i] == 'A' && collectBuffer[i+1] == 'L' && collectBuffer[i+2] == 'V' && collectBuffer[i+3] == 'O') {
+      else if (collectBuffer[i] == 'A' && collectBuffer[i+1] == 'L' && collectBuffer[i+2] == 'V' && collectBuffer[i+3] == 'O') {
         memcpy(alarmCode, &collectBuffer[i], 4);
         alarmCode[4] = '\0';
+        patternPosition = i;
         alarmFound = true;
       }
       // ALHI - Alarm Hinten
       else if (collectBuffer[i] == 'A' && collectBuffer[i+1] == 'L' && collectBuffer[i+2] == 'H' && collectBuffer[i+3] == 'I') {
         memcpy(alarmCode, &collectBuffer[i], 4);
         alarmCode[4] = '\0';
+        patternPosition = i;
         alarmFound = true;
       }
       // TAVO - Tür Alarm Vorne
       else if (collectBuffer[i] == 'T' && collectBuffer[i+1] == 'A' && collectBuffer[i+2] == 'V' && collectBuffer[i+3] == 'O') {
         memcpy(alarmCode, &collectBuffer[i], 4);
         alarmCode[4] = '\0';
+        patternPosition = i;
         alarmFound = true;
       }
       // TAHI - Tür Alarm Hinten
       else if (collectBuffer[i] == 'T' && collectBuffer[i+1] == 'A' && collectBuffer[i+2] == 'H' && collectBuffer[i+3] == 'I') {
         memcpy(alarmCode, &collectBuffer[i], 4);
         alarmCode[4] = '\0';
+        patternPosition = i;
         alarmFound = true;
       }
       
@@ -218,18 +250,54 @@ void loop() {
         Serial.print(alarmCode);
         Serial.println("\" ***");
         
+        // Update Heartbeat-Timer auch bei Alarmen
+        lastValidMessageTime = millis();
+        timeoutAlarmSent = false;  // Reset Timeout-Flag
+        
         // Per ESP-NOW an Wetterstation senden
         sendAlarmViaESPNOW(alarmCode);
         break;  // Nur erstes Muster
       }
     }
     
-    // Buffer zurücksetzen
-    collectCount = 0;
+    // Buffer-Verwaltung: Verwerfe Daten VOR dem Muster, behalte Daten NACH dem Muster
+    if (patternPosition >= 0) {
+      // Muster gefunden - verwerfe alles davor und das Muster selbst (4 Bytes)
+      int bytesToRemove = patternPosition + 4;
+      int remainingBytes = collectCount - bytesToRemove;
+      
+      if (remainingBytes > 0) {
+        // Verschiebe übrige Bytes an den Anfang
+        for (int i = 0; i < remainingBytes; i++) {
+          collectBuffer[i] = collectBuffer[bytesToRemove + i];
+        }
+        collectCount = remainingBytes;
+      } else {
+        collectCount = 0;  // Alles verarbeitet
+      }
+    } else {
+      // Kein Muster gefunden - behalte nur die letzten 3 Bytes (könnte Start eines Musters sein)
+      if (collectCount > 3) {
+        for (int i = 0; i < 3; i++) {
+          collectBuffer[i] = collectBuffer[collectCount - 3 + i];
+        }
+        collectCount = 3;
+      }
+      // Sonst behalte alles
+    }
     
     // Jetzt FIFO reset für nächsten Empfang
     rfm12_reset_fifo();
     rfm12_trans(0x82D9);  // Enable Receiver
+  }
+  
+  // Timeout-Überwachung: Wenn 5 Sekunden nichts empfangen wurde
+  if (!timeoutAlarmSent && (millis() - lastValidMessageTime) > MESSAGE_TIMEOUT) {
+    Serial.println("\n*** TIMEOUT! Keine Nachricht seit 5 Sekunden! ***");
+    Serial.println("  → Sende Timeout-Alarm über ESP-NOW\n");
+    
+    sendAlarmViaESPNOW("TOUT");  // TOUT = Timeout
+    timeoutAlarmSent = true;  // Nur einmal senden bis wieder eine Nachricht kommt
   }
   
   delay(1);  // Kurze Pause
