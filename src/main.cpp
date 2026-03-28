@@ -28,6 +28,18 @@ uint8_t wetterstationMAC[] = {0x14, 0x33, 0x5C, 0x38, 0xD5, 0xD4};
 #define RFM12_NIRQ    4   // nIRQ Signal
 // Hardware SPI Pins: MOSI=23, MISO=19, SCK=18
 
+// Serielle Schnittstelle für WetterDach-Empfang
+#define RXD0 27   // GPIO für RX (an deinen Pins anpassen!)
+#define TXD0 26  // GPIO für TX
+
+#define HC08_SET 16  // Zur Kanal-Umschaltung (falls benötigt)
+
+#define GPS_BAUD 9600
+
+uint8_t receiverMAC[] = {0x14, 0x33, 0x5C, 0x38, 0xD5, 0xD4};
+
+HardwareSerial DachSerial(2);  // UART2 verwenden
+
 // Empfangspuffer
 char empfangsString[5];
 char collectBuffer[20];  // Buffer zum Sammeln mehrerer Interrupts
@@ -56,6 +68,24 @@ typedef struct struct_message {
 
 struct_message alarmMsg;
 
+
+// Datenstruktur für WetterDach (muss identisch mit Empfänger sein!)
+struct WetterDach {
+  float STX = 0;
+  float Speed = 0;
+  float Dir = 0;
+  float Hum = 0;
+  float Taupunkt = 0;
+  float Temp = 0;
+  float Press = 0;
+  float sectic = 0;
+  float Regentic = 0;
+  float bmp085 = 0;
+  float speedinv = 0;
+  float calcCheck = 0;
+  unsigned long timestamp = 0;
+} WetterDach;
+
 // Timer für Alarmdauer-Messung
 unsigned long alarmStartTime = 0;  // Zeitpunkt des Alarmbeginns (millis())
 bool alarmActive = false;           // True während ein Alarm läuft
@@ -64,11 +94,37 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   
+pinMode(HC08_SET, OUTPUT);
+  digitalWrite(HC08_SET, LOW);
+  delay(200);
+  
+  // AT-Befehl senden (Kanal 15)
+  Serial.println("Sende AT+C015 an HC-08...");
+  DachSerial.print("AT+C015\r\n");
+  delay(200);
+  
+  digitalWrite(HC08_SET, HIGH);
+
   Serial.println("========================================");
   Serial.println("RFM12 Empfänger + ESP-NOW + NTP");
   Serial.println("Frequenz: 434,15 MHz | 9600 bps");
   Serial.println("========================================");
   
+  // Peer (Empfänger) registrieren
+  esp_now_peer_info_t peerInfo;
+  memcpy(peerInfo.peer_addr, receiverMAC, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+  
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("Fehler beim Hinzufügen des Peers!");
+    return;
+  }
+  
+  Serial.println("ESP-NOW Sender bereit!");
+ 
+ 
+ 
   // WiFi verbinden für NTP-Zeitsynchronisation
   Serial.print("Verbinde mit WiFi: ");
   Serial.println(ssid);
@@ -105,7 +161,10 @@ void setup() {
   }
   
   // ESP-NOW initialisieren (WiFi bleibt verbunden)
-  espnow_init();
+   if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW Init Fehler!");
+    return;
+  }
   
   // SPI initialisieren
   SPI.begin();  // SCK=18, MISO=19, MOSI=23
@@ -144,6 +203,109 @@ void setup() {
 }
 
 void loop() {
+  
+  // WetterDach-Daten empfangen und weiterleiten
+  if (DachSerial.available()) {
+    String Wetterdaten = DachSerial.readStringUntil('\n');
+    Serial.print("Empfangen: ");
+    Serial.print(Wetterdaten);
+    
+    int length = Wetterdaten.length();
+    Serial.print(" (Länge: ");
+    Serial.print(length);
+    Serial.println(")");
+    
+    // Parse Wetterdaten in Float-Array
+    float wetterArray[20];
+    int arrayIndex = 0;
+    int startPos = 0;
+    
+    // Durchlaufe den String und trenne an Semikolons
+    for (int i = 0; i <= Wetterdaten.length() && arrayIndex < 20; i++) {
+      if (i == Wetterdaten.length() || Wetterdaten.charAt(i) == ';') {
+        String valueStr = Wetterdaten.substring(startPos, i);
+        wetterArray[arrayIndex] = valueStr.toFloat();
+        arrayIndex++;
+        startPos = i + 1;
+      }
+    }
+    
+    Serial.print("Anzahl Werte: ");
+    Serial.println(arrayIndex);
+    
+    // Aktualisiere globale Wetterdaten-Struktur
+    if(arrayIndex >= 12) {
+      WetterDach.STX = wetterArray[0];
+      WetterDach.Speed = wetterArray[1];
+      WetterDach.Dir = wetterArray[2];
+      WetterDach.Hum = wetterArray[3];
+      WetterDach.Taupunkt = wetterArray[4];
+      WetterDach.Temp = wetterArray[5];
+      WetterDach.Press = wetterArray[6];
+      WetterDach.sectic = wetterArray[7];
+      WetterDach.Regentic = wetterArray[8];
+      WetterDach.bmp085 = wetterArray[9];
+      WetterDach.speedinv = wetterArray[10];
+      WetterDach.calcCheck = wetterArray[11];
+      WetterDach.timestamp = millis();
+      
+      Serial.println("✓ WetterDach-Daten aktualisiert!");
+      
+      // *** Weiterleitung via ESP-NOW ***
+      esp_err_t result = esp_now_send(receiverMAC, (uint8_t *)&WetterDach, sizeof(WetterDach));
+      
+      if (result == ESP_OK) {
+        Serial.println("✓ Daten via ESP-NOW gesendet!");
+      } else {
+        Serial.println("✗ ESP-NOW Sendefehler!");
+      }
+      
+      // Debug-Ausgabe
+      Serial.println("\n=== Weitergeleitete Wetter_Dach-Daten ===");
+      Serial.printf("Temp: %.2f °C\n", WetterDach.Temp);
+      Serial.printf("Luftdruck: %.2f hPa\n", WetterDach.Press);
+      Serial.printf("Wind: %.2f km/h\n", WetterDach.Speed);
+      Serial.printf("Regen-Ticks: %.0f\n", WetterDach.Regentic);
+      Serial.println("========================================\n");
+    }
+  }
+  
+  // Mitternachts-Reset für sectic-Zähler
+  static int lastResetDay = -1;
+  struct tm timeinfo;
+  
+  if(getLocalTime(&timeinfo)) {
+    if(timeinfo.tm_hour == 0 && timeinfo.tm_min == 0 && timeinfo.tm_mday != lastResetDay) {
+      Serial.println("\n=== Mitternachts-Reset wird ausgeführt ===");
+      Serial.println("Sende 0x1E an DachSerial (2x mit 2 Sekunden Pause)...");
+      
+      // Ersten Reset senden
+      DachSerial.write(0x1E);
+      Serial.println("Erste 0x1E gesendet");
+      delay(2000);
+      
+      // Zweiten Reset senden
+      DachSerial.write(0x1E);
+      Serial.println("Zweite 0x1E gesendet");
+      delay(3000);
+      
+      // Prüfe ob sectic auf 0 zurückgesetzt wurde
+      Serial.print("Prüfe sectic-Wert: ");
+      Serial.println(WetterDach.sectic, 0);
+      
+      if(WetterDach.sectic == 0) {
+        Serial.println("✓ sectic erfolgreich auf 0 zurückgesetzt!");
+      } else {
+        Serial.print("✗ Warnung: sectic ist nicht 0, aktueller Wert: ");
+        Serial.println(WetterDach.sectic, 0);
+      }
+      
+      lastResetDay = timeinfo.tm_mday;
+      Serial.println("=== Mitternachts-Reset abgeschlossen ===\n");
+    }
+  }
+  
+  
   // nIRQ prüfen - LOW bedeutet Interrupt (Daten bereit)
   if (digitalRead(RFM12_NIRQ) == LOW) {
     // Status lesen
