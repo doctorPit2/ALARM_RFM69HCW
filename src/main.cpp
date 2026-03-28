@@ -29,8 +29,8 @@ uint8_t wetterstationMAC[] = {0x14, 0x33, 0x5C, 0x38, 0xD5, 0xD4};
 // Hardware SPI Pins: MOSI=23, MISO=19, SCK=18
 
 // Serielle Schnittstelle für WetterDach-Empfang
-#define RXD0 27   // GPIO für RX (an deinen Pins anpassen!)
-#define TXD0 26  // GPIO für TX
+#define RXD0 26   // GPIO für RX (an deinen Pins anpassen!)
+#define TXD0 27  // GPIO für TX
 
 #define HC08_SET 16  // Zur Kanal-Umschaltung (falls benötigt)
 
@@ -94,37 +94,35 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   
-pinMode(HC08_SET, OUTPUT);
-  digitalWrite(HC08_SET, LOW);
+  // DachSerial initialisieren (HC-08 Modul)
+  DachSerial.begin(GPS_BAUD, SERIAL_8N1, RXD0, TXD0);
+  DachSerial.setTimeout(1000);  // Timeout für readStringUntil()
+  delay(100);
+  
+  pinMode(HC08_SET, OUTPUT);
+  digitalWrite(HC08_SET, LOW);  // AT-Modus aktivieren
   delay(200);
   
   // AT-Befehl senden (Kanal 15)
   Serial.println("Sende AT+C015 an HC-08...");
   DachSerial.print("AT+C015\r\n");
-  delay(200);
+  delay(500);  // Warte auf Antwort
   
-  digitalWrite(HC08_SET, HIGH);
+  // Buffer leeren (AT-Antwort entfernen)
+  while(DachSerial.available()) {
+    char c = DachSerial.read();
+    Serial.write(c);  // Debug: Zeige AT-Antwort
+  }
+  Serial.println();
+  
+  digitalWrite(HC08_SET, HIGH);  // Datenmodus aktivieren
+  delay(100);
 
   Serial.println("========================================");
   Serial.println("RFM12 Empfänger + ESP-NOW + NTP");
   Serial.println("Frequenz: 434,15 MHz | 9600 bps");
   Serial.println("========================================");
   
-  // Peer (Empfänger) registrieren
-  esp_now_peer_info_t peerInfo;
-  memcpy(peerInfo.peer_addr, receiverMAC, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
-  
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("Fehler beim Hinzufügen des Peers!");
-    return;
-  }
-  
-  Serial.println("ESP-NOW Sender bereit!");
- 
- 
- 
   // WiFi verbinden für NTP-Zeitsynchronisation
   Serial.print("Verbinde mit WiFi: ");
   Serial.println(ssid);
@@ -161,10 +159,25 @@ pinMode(HC08_SET, OUTPUT);
   }
   
   // ESP-NOW initialisieren (WiFi bleibt verbunden)
-   if (esp_now_init() != ESP_OK) {
+  if (esp_now_init() != ESP_OK) {
     Serial.println("ESP-NOW Init Fehler!");
     return;
   }
+  Serial.println("✓ ESP-NOW initialisiert");
+  
+  // Peer (Empfänger) registrieren
+  esp_now_peer_info_t peerInfo;
+  memset(&peerInfo, 0, sizeof(peerInfo));
+  memcpy(peerInfo.peer_addr, receiverMAC, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+  peerInfo.ifidx = WIFI_IF_STA;
+  
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("Fehler beim Hinzufügen des Peers!");
+    return;
+  }
+  Serial.println("✓ ESP-NOW Sender bereit!");
   
   // SPI initialisieren
   SPI.begin();  // SCK=18, MISO=19, MOSI=23
@@ -203,6 +216,31 @@ pinMode(HC08_SET, OUTPUT);
 }
 
 void loop() {
+  
+  // Debug: Periodischer Status der seriellen Verbindung
+  static unsigned long lastDebugTime = 0;
+  if (millis() - lastDebugTime > 10000) {  // Alle 10 Sekunden
+    int avail = DachSerial.available();
+    Serial.print("[DEBUG] DachSerial verfügbare Bytes: ");
+    Serial.println(avail);
+    
+    // Zeige Raw-Bytes falls vorhanden
+    if (avail > 0) {
+      Serial.print("  Raw-Bytes (erste 50): ");
+      int bytesToRead = min(avail, 50);
+      for (int i = 0; i < bytesToRead; i++) {
+        int b = DachSerial.read();
+        if (b >= 32 && b <= 126) {
+          Serial.write(b);  // Druckbares Zeichen
+        } else {
+          Serial.printf("[0x%02X]", b);  // Hex-Darstellung
+        }
+      }
+      Serial.println();
+    }
+    
+    lastDebugTime = millis();
+  }
   
   // WetterDach-Daten empfangen und weiterleiten
   if (DachSerial.available()) {
