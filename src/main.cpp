@@ -44,16 +44,21 @@ void rfm12_reset_fifo();
 
 // ESP-NOW Funktionen
 void espnow_init();
-void sendAlarmViaESPNOW(const char* alarmCode);
+void sendAlarmViaESPNOW(const char* alarmCode, unsigned long duration = 0);
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
 
 // Struktur für ESP-NOW Nachrichten
 typedef struct struct_message {
-  char alarmType[5];  // "ALVO", "ALHI", "TAVO", "TAHI"
-  time_t timestamp;   // Unix-Timestamp (Sekunden seit 1.1.1970)
+  char alarmType[5];     // "ALVO", "ALHI", "TAVO", "TAHI", "nixx"
+  time_t timestamp;      // Unix-Timestamp (Sekunden seit 1.1.1970)
+  unsigned long alarmDuration;  // Alarmdauer in Sekunden (0 wenn kein Alarm aktiv war)
 } struct_message;
 
 struct_message alarmMsg;
+
+// Timer für Alarmdauer-Messung
+unsigned long alarmStartTime = 0;  // Zeitpunkt des Alarmbeginns (millis())
+bool alarmActive = false;           // True während ein Alarm läuft
 
 void setup() {
   Serial.begin(115200);
@@ -178,27 +183,6 @@ void loop() {
   // Wenn 50ms nichts mehr kam UND mindestens 4 Bytes vorhanden, verarbeite Daten
   if (collectCount >= 4 && (millis() - lastReceiveTime) > 50) {
     
-    Serial.print("✓ Empfangen (");
-    Serial.print(collectCount);
-    Serial.print(" Bytes): ");
-    
-    for (int i = 0; i < collectCount; i++) {
-      Serial.print("0x");
-      if ((uint8_t)collectBuffer[i] < 0x10) Serial.print("0");
-      Serial.print((uint8_t)collectBuffer[i], HEX);
-      Serial.print(" ");
-    }
-    
-    Serial.print("-> \"");
-    for (int i = 0; i < collectCount; i++) {
-      if (collectBuffer[i] >= 32 && collectBuffer[i] < 127) {
-        Serial.print(collectBuffer[i]);
-      } else {
-        Serial.print(".");
-      }
-    }
-    Serial.println("\"");
-    
     // Suche nach bekannten 4-Byte Mustern im GESAMTEN Buffer (nicht nur an 4-Byte Grenzen!)
     bool alarmFound = false;
     bool heartbeatFound = false;
@@ -214,6 +198,25 @@ void loop() {
         lastValidMessageTime = millis();
         timeoutAlarmSent = false;  // Reset Timeout-Flag
         Serial.println("  ↻ Heartbeat empfangen (nixx)");
+        
+        // Timer stoppen wenn Alarm aktiv war
+        if (alarmActive) {
+          unsigned long alarmDuration = (millis() - alarmStartTime) / 1000;  // Dauer in Sekunden
+          alarmActive = false;
+          
+          Serial.print("  ⏱ Alarm beendet. Dauer: ");
+          Serial.print(alarmDuration);
+          Serial.println(" Sekunden");
+          
+          // Sende "nixx" mit Alarmdauer
+          memcpy(alarmCode, "nixx", 4);
+          alarmCode[4] = '\0';
+          patternPosition = i;
+          
+          // Per ESP-NOW senden (mit Dauer)
+          sendAlarmViaESPNOW(alarmCode, alarmDuration);
+        }
+        
         break;  // Heartbeat gefunden, fertig
       }
       // ALVO - Alarm Vorne
@@ -254,8 +257,15 @@ void loop() {
         lastValidMessageTime = millis();
         timeoutAlarmSent = false;  // Reset Timeout-Flag
         
-        // Per ESP-NOW an Wetterstation senden
-        sendAlarmViaESPNOW(alarmCode);
+        // Timer starten beim ERSTEN Alarm
+        if (!alarmActive) {
+          alarmStartTime = millis();
+          alarmActive = true;
+          Serial.println("  ⏱ Alarm-Timer gestartet");
+        }
+        
+        // Per ESP-NOW an Wetterstation senden (ohne Dauer, da Alarm läuft)
+        sendAlarmViaESPNOW(alarmCode, 0);
         break;  // Nur erstes Muster
       }
     }
@@ -296,7 +306,7 @@ void loop() {
     Serial.println("\n*** TIMEOUT! Keine Nachricht seit 5 Sekunden! ***");
     Serial.println("  → Sende Timeout-Alarm über ESP-NOW\n");
     
-    sendAlarmViaESPNOW("TOUT");  // TOUT = Timeout
+    sendAlarmViaESPNOW("TOUT", 0);  // TOUT = Timeout, keine Dauer
     timeoutAlarmSent = true;  // Nur einmal senden bis wieder eine Nachricht kommt
   }
   
@@ -403,11 +413,12 @@ void espnow_init() {
   Serial.println();
 }
 
-void sendAlarmViaESPNOW(const char* alarmCode) {
+void sendAlarmViaESPNOW(const char* alarmCode, unsigned long duration) {
   // Nachricht vorbereiten
   strncpy(alarmMsg.alarmType, alarmCode, 4);
   alarmMsg.alarmType[4] = '\0';
   alarmMsg.timestamp = time(nullptr);  // Unix-Timestamp
+  alarmMsg.alarmDuration = duration;   // Alarmdauer in Sekunden
   
   // Per ESP-NOW senden
   esp_err_t result = esp_now_send(wetterstationMAC, (uint8_t *) &alarmMsg, sizeof(alarmMsg));
@@ -423,6 +434,13 @@ void sendAlarmViaESPNOW(const char* alarmCode) {
     
     Serial.print(" (");
     Serial.print(timeStr);
+    
+    if (duration > 0) {
+      Serial.print(", Dauer: ");
+      Serial.print(duration);
+      Serial.print("s");
+    }
+    
     Serial.println(")");
   } else {
     Serial.println("  → ESP-NOW Sendefehler!");
