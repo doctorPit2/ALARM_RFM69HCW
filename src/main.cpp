@@ -5,14 +5,20 @@
 #include <time.h>
 
 // ============================================================
+
 // RFM12 EMPFÄNGER + ESP-NOW SENDER
 // Frequenz: 434,15 MHz | Datenrate: 9600 bps
 // Sendet Alarmmeldungen per ESP-NOW an Wetterstation
+// Dieses Modul dient auch als Repeater:
+//Empfang und Decoding der über seriell Funk HC11 empfangenen Wetterdaten vom Dach
+// und weiterleiten über ESPNow an "Wetter_innen" Station
+//Empfang und weiterleiten der mit RFM11 emfangenen Alarmdaten mit ESPNow an "Wetter_innen" Station
+
 // ============================================================
 
 // WiFi-Credentials für NTP-Zeitsynchronisation (ANPASSEN!)
-const char* ssid = "Glasfaser";
-const char* password = "3x3Istneun";
+const char* ssid = "Lenovo";
+const char* password = "lenovotablet";
 
 // NTP-Server Konfiguration
 const char* ntpServer = "pool.ntp.org";
@@ -59,32 +65,46 @@ void espnow_init();
 void sendAlarmViaESPNOW(const char* alarmCode, unsigned long duration = 0);
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
 
-// Struktur für ESP-NOW Nachrichten
-typedef struct struct_message {
-  char alarmType[5];     // "ALVO", "ALHI", "TAVO", "TAHI", "nixx"
-  time_t timestamp;      // Unix-Timestamp (Sekunden seit 1.1.1970)
-  unsigned long alarmDuration;  // Alarmdauer in Sekunden (0 wenn kein Alarm aktiv war)
-} struct_message;
+// Nachrichtentypen für ESP-NOW
+enum MessageType : uint8_t {
+  MSG_TYPE_ALARM = 1,   // Alarmdaten
+  MSG_TYPE_WETTER = 2   // Wetterdaten
+};
 
-struct_message alarmMsg;
+// Vereinheitlichte Datenstruktur für ESP-NOW (muss identisch mit Empfänger sein!)
+typedef struct UnifiedMessage {
+  uint8_t messageType;           // MSG_TYPE_ALARM oder MSG_TYPE_WETTER
+  
+  // Alarmdaten (nur gültig wenn messageType == MSG_TYPE_ALARM)
+  struct {
+    char alarmType[5];           // "ALVO", "ALHI", "TAVO", "TAHI", "nixx"
+    time_t timestamp;            // Unix-Timestamp (Sekunden seit 1.1.1970)
+    unsigned long alarmDuration; // Alarmdauer in Sekunden (0 wenn kein Alarm aktiv war)
+  } alarm;
+  
+  // Wetterdaten (nur gültig wenn messageType == MSG_TYPE_WETTER)
+  struct {
+    float STX;
+    float Speed;
+    float Dir;
+    float Hum;
+    float Taupunkt;
+    float Temp;
+    float Press;
+    float sectic;
+    float Regentic;
+    float bmp085;
+    float speedinv;
+    float calcCheck;
+    unsigned long timestamp;
+  } wetter;
+  
+} UnifiedMessage;
 
+UnifiedMessage espnowMsg;
 
-// Datenstruktur für WetterDach (muss identisch mit Empfänger sein!)
-struct WetterDach {
-  float STX = 0;
-  float Speed = 0;
-  float Dir = 0;
-  float Hum = 0;
-  float Taupunkt = 0;
-  float Temp = 0;
-  float Press = 0;
-  float sectic = 0;
-  float Regentic = 0;
-  float bmp085 = 0;
-  float speedinv = 0;
-  float calcCheck = 0;
-  unsigned long timestamp = 0;
-} WetterDach;
+// Duplikats-Erkennung für Alarme
+char lastSentAlarm[5] = "----";  // Letzter gesendeter Alarm-Code
 
 // Timer für Alarmdauer-Messung
 unsigned long alarmStartTime = 0;  // Zeitpunkt des Alarmbeginns (millis())
@@ -271,39 +291,40 @@ void loop() {
     Serial.print("Anzahl Werte: ");
     Serial.println(arrayIndex);
     
-    // Aktualisiere globale Wetterdaten-Struktur
+    // Aktualisiere Wetterdaten in vereinheitlichter Struktur
     if(arrayIndex >= 12) {
-      WetterDach.STX = wetterArray[0];
-      WetterDach.Speed = wetterArray[1];
-      WetterDach.Dir = wetterArray[2];
-      WetterDach.Hum = wetterArray[3];
-      WetterDach.Taupunkt = wetterArray[4];
-      WetterDach.Temp = wetterArray[5];
-      WetterDach.Press = wetterArray[6];
-      WetterDach.sectic = wetterArray[7];
-      WetterDach.Regentic = wetterArray[8];
-      WetterDach.bmp085 = wetterArray[9];
-      WetterDach.speedinv = wetterArray[10];
-      WetterDach.calcCheck = wetterArray[11];
-      WetterDach.timestamp = millis();
+      espnowMsg.messageType = MSG_TYPE_WETTER;
+      espnowMsg.wetter.STX = wetterArray[0];
+      espnowMsg.wetter.Speed = wetterArray[1];
+      espnowMsg.wetter.Dir = wetterArray[2];
+      espnowMsg.wetter.Hum = wetterArray[3];
+      espnowMsg.wetter.Taupunkt = wetterArray[4];
+      espnowMsg.wetter.Temp = wetterArray[5];
+      espnowMsg.wetter.Press = wetterArray[6];
+      espnowMsg.wetter.sectic = wetterArray[7];
+      espnowMsg.wetter.Regentic = wetterArray[8];
+      espnowMsg.wetter.bmp085 = wetterArray[9];
+      espnowMsg.wetter.speedinv = wetterArray[10];
+      espnowMsg.wetter.calcCheck = wetterArray[11];
+      espnowMsg.wetter.timestamp = millis();
       
       Serial.println("✓ WetterDach-Daten aktualisiert!");
       
       // *** Weiterleitung via ESP-NOW ***
-      esp_err_t result = esp_now_send(receiverMAC, (uint8_t *)&WetterDach, sizeof(WetterDach));
+      esp_err_t result = esp_now_send(receiverMAC, (uint8_t *)&espnowMsg, sizeof(espnowMsg));
       
       if (result == ESP_OK) {
-        Serial.println("✓ Daten via ESP-NOW gesendet!");
+        Serial.println("✓ Wetterdaten via ESP-NOW gesendet!");
       } else {
         Serial.println("✗ ESP-NOW Sendefehler!");
       }
       
       // Debug-Ausgabe
       Serial.println("\n=== Weitergeleitete Wetter_Dach-Daten ===");
-      Serial.printf("Temp: %.2f °C\n", WetterDach.Temp);
-      Serial.printf("Luftdruck: %.2f hPa\n", WetterDach.Press);
-      Serial.printf("Wind: %.2f km/h\n", WetterDach.Speed);
-      Serial.printf("Regen-Ticks: %.0f\n", WetterDach.Regentic);
+      Serial.printf("Temp: %.2f °C\n", espnowMsg.wetter.Temp);
+      Serial.printf("Luftdruck: %.2f hPa\n", espnowMsg.wetter.Press);
+      Serial.printf("Wind: %.2f km/h\n", espnowMsg.wetter.Speed);
+      Serial.printf("Regen-Ticks: %.0f\n", espnowMsg.wetter.Regentic);
       Serial.println("========================================\n");
     }
   }
@@ -329,13 +350,13 @@ void loop() {
       
       // Prüfe ob sectic auf 0 zurückgesetzt wurde
       Serial.print("Prüfe sectic-Wert: ");
-      Serial.println(WetterDach.sectic, 0);
+      Serial.println(espnowMsg.wetter.sectic, 0);
       
-      if(WetterDach.sectic == 0) {
+      if(espnowMsg.wetter.sectic == 0) {
         Serial.println("✓ sectic erfolgreich auf 0 zurückgesetzt!");
       } else {
         Serial.print("✗ Warnung: sectic ist nicht 0, aktueller Wert: ");
-        Serial.println(WetterDach.sectic, 0);
+        Serial.println(espnowMsg.wetter.sectic, 0);
       }
       
       lastResetDay = timeinfo.tm_mday;
@@ -614,21 +635,36 @@ void espnow_init() {
 }
 
 void sendAlarmViaESPNOW(const char* alarmCode, unsigned long duration) {
+  
+  // ** DUPLIKATS-FILTER **
+  // Nur senden wenn:
+  // 1. Alarm sich geändert hat ODER
+  // 2. Es eine Endmeldung mit Dauer ist (duration > 0)
+  if (strcmp(alarmCode, lastSentAlarm) == 0 && duration == 0) {
+    Serial.print("  ⊗ Duplikat ignoriert: ");
+    Serial.println(alarmCode);
+    return;  // Gleicher Alarm wie vorher, nicht nochmal senden
+  }
+  
   // Nachricht vorbereiten
-  strncpy(alarmMsg.alarmType, alarmCode, 4);
-  alarmMsg.alarmType[4] = '\0';
-  alarmMsg.timestamp = time(nullptr);  // Unix-Timestamp
-  alarmMsg.alarmDuration = duration;   // Alarmdauer in Sekunden
+  espnowMsg.messageType = MSG_TYPE_ALARM;
+  strncpy(espnowMsg.alarm.alarmType, alarmCode, 4);
+  espnowMsg.alarm.alarmType[4] = '\0';
+  espnowMsg.alarm.timestamp = time(nullptr);  // Unix-Timestamp
+  espnowMsg.alarm.alarmDuration = duration;   // Alarmdauer in Sekunden
+  
+  // Speichere als "letzter gesendeter Alarm"
+  strncpy(lastSentAlarm, alarmCode, 5);
   
   // Per ESP-NOW senden
-  esp_err_t result = esp_now_send(wetterstationMAC, (uint8_t *) &alarmMsg, sizeof(alarmMsg));
+  esp_err_t result = esp_now_send(wetterstationMAC, (uint8_t *) &espnowMsg, sizeof(espnowMsg));
   
   if (result == ESP_OK) {
-    Serial.print("  → ESP-NOW gesendet: ");
-    Serial.print(alarmMsg.alarmType);
+    Serial.print("  → ESP-NOW Alarm gesendet: ");
+    Serial.print(espnowMsg.alarm.alarmType);
     
     // Zeit lesbar formatieren
-    struct tm* timeinfo = localtime(&alarmMsg.timestamp);
+    struct tm* timeinfo = localtime(&espnowMsg.alarm.timestamp);
     char timeStr[25];
     strftime(timeStr, sizeof(timeStr), "%d.%m.%Y %H:%M:%S", timeinfo);
     

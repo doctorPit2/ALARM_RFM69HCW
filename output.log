@@ -1,33 +1,34 @@
-ets Jul 29 2019 12:21:46
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;13.0;0;47.6;1.6;12.4;1027.7;46864;0;10.7;13.0;15 (Länge: 53)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
 
-rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
-configsip: 0, SPIWP:0xee
-clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
-mode:DIO, clock div:2
-load:0x3fff0030,len:1184
-load:0x40078000,len:13232
-load:0x40080400,len:3028
-entry 0x400805e4
-Sende AT+C015 an HC-08...
-
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.40 °C
+Luftdruck: 1027.70 hPa
+Wind: 13.00 km/h
+Regen-Ticks: 0
 ========================================
-RFM12 Empfänger + ESP-NOW + NTP
-Frequenz: 434,15 MHz | 9600 bps
+
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+[DEBUG] DachSerial verfügbare Bytes: 0
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;11.0;15;47.6;1.6;12.4;1027.6;46867;0;10.7;11.0;15 (Länge: 54)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.40 °C
+Luftdruck: 1027.60 hPa
+Wind: 11.00 km/h
+Regen-Ticks: 0
 ========================================
-Verbinde mit WiFi: Glasfaser
-.
-✓ WiFi verbunden
-IP-Adresse: 192.168.100.18
-Synchronisiere Zeit mit NTP...
-✓ Zeit synchronisiert
-Aktuelle Zeit: 28.03.2026 13:27:23
-✓ ESP-NOW initialisiert
-✓ ESP-NOW Sender bereit!
-RFM12 Software Reset...
-Initialisiere RFM12...
-  Init abgeschlossen (FIFO Level=4 Bytes)
-✓ Bereit! Warte auf Daten...
-  Heartbeat-Überwachung aktiv (Timeout: 5s)
 
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
@@ -35,6 +36,93 @@ Initialisiere RFM12...
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;14.0;0;47.6;1.6;12.4;1027.6;46870;0;10.7;14.0;15 (Länge: 53)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.40 °C
+Luftdruck: 1027.60 hPa
+Wind: 14.00 km/h
+Regen-Ticks: 0
+========================================
+
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;14.0;0;47.6;1.6;12.4;1027.7;46873;0;10.7;14.0;15 (Länge: 53)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.40 °C
+Luftdruck: 1027.70 hPa
+Wind: 14.00 km/h
+Regen-Ticks: 0
+========================================
+
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;28.0;14;47.6;1.6;12.4;1027.6;46876;0;10.7;13.0;15 (Länge: 54)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.40 °C
+Luftdruck: 1027.60 hPa
+Wind: 28.00 km/h
+Regen-Ticks: 0
+========================================
+
+  ↻ Heartbeat empfangen (nixx)
+[DEBUG] DachSerial verfügbare Bytes: 0
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;13.0;1;47.6;1.6;12.3;102;13.0;15 (Länge: 37)
+Anzahl Werte: 9
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;21.0;0;47.6;1.6;12.3;1027.7;46882;0;10.7;21.0;15 (Länge: 52)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.30 °C
+Luftdruck: 1027.70 hPa
+Wind: 21.00 km/h
+Regen-Ticks: 0
+========================================
+
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;22.0;0;47.6;1 (Länge: 17)
+Anzahl Werte: 5
+  ↻ Heartbeat empfangen (nixx)
+[DEBUG] DachSerial verfügbare Bytes: 0
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;20.0;0;47.6;1.6;12.3;1027;20.0;15 (Länge: 38)
+Anzahl Werte: 9
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
@@ -43,10 +131,242 @@ Initialisiere RFM12...
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;15.0;0;47.6;1.6;12.3;1027.7;46891;0;10.7;15.0;15 (Länge: 53)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.30 °C
+Luftdruck: 1027.70 hPa
+Wind: 15.00 km/h
+Regen-Ticks: 0
+========================================
+
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  *** ALARM ERKANNT: "ALVO" ***
+  ⏱ Alarm-Timer gestartet
+  → ESP-NOW Alarm gesendet: ALVO (31.03.2026 13:01:35)
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+Empfangen: STX;1538.0;2;47.6;1.6;12.3;1 (Länge: 28)
+Anzahl Werte: 7
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+[DEBUG] DachSerial verfügbare Bytes: 0
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+Empfangen: STX;1538.0;2;47.6;1.5;12.3;1027.6;46897;0;10.7;2.0;15 (Länge: 54)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.30 °C
+Luftdruck: 1027.60 hPa
+Wind: 1538.00 km/h
+Regen-Ticks: 0
+========================================
+
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+Empfangen: STX;16.0;0;47.6;1.6;12.3;1027.7;46900;0;10.7;16.0;15 (Länge: 53)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.30 °C
+Luftdruck: 1027.70 hPa
+Wind: 16.00 km/h
+Regen-Ticks: 0
+========================================
+
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  ↻ Heartbeat empfangen (nixx)
+  ⏱ Alarm beendet. Dauer: 9 Sekunden
+  → ESP-NOW Alarm gesendet: nixx (31.03.2026 13:01:45, Dauer: 9s)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;14.0;0;47.6;1.6;12.3;1027.6;46903;0;10.7;14. (Länge: 48)
+Anzahl Werte: 11
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;14.0;0;47.6;1;0.0;15 (Länge: 25)
+Anzahl Werte: 7
+  ↻ Heartbeat empfangen (nixx)
+[DEBUG] DachSerial verfügbare Bytes: 0
+  *** ALARM ERKANNT: "ALVO" ***
+  ⏱ Alarm-Timer gestartet
+  → ESP-NOW Alarm gesendet: ALVO (31.03.2026 13:01:49)
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+Empfangen: STX;15.0;0;47.6;1.6;12.3;1027.6;46909;0;10.7;15.0;15 (Länge: 53)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.30 °C
+Luftdruck: 1027.60 hPa
+Wind: 15.00 km/h
+Regen-Ticks: 0
+========================================
+
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+Empfangen: STX;14.0;0;47.6;1;14. (Länge: 21)
+Anzahl Werte: 6
+  ↻ Heartbeat empfangen (nixx)
+  ⏱ Alarm beendet. Dauer: 6 Sekunden
+  → ESP-NOW Alarm gesendet: nixx (31.03.2026 13:01:56, Dauer: 6s)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;14.0;0;47.6;1.5;12.3;1027.7;46915;0;10.7;14.0;15 (Länge: 53)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.30 °C
+Luftdruck: 1027.70 hPa
+Wind: 14.00 km/h
+Regen-Ticks: 0
+========================================
+
+  ↻ Heartbeat empfangen (nixx)
+  *** ALARM ERKANNT: "ALVO" ***
+  ⏱ Alarm-Timer gestartet
+  → ESP-NOW Alarm gesendet: ALVO (31.03.2026 13:01:58)
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+[DEBUG] DachSerial verfügbare Bytes: 0
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+Empfangen: STX;14.0;0;47.6;1.5;12.3;102;14.0;15 (Länge: 37)
+Anzahl Werte: 9
+  *** ALARM ERKANNT: "ALVO" ***
+  ⊗ Duplikat ignoriert: ALVO
+  ↻ Heartbeat empfangen (nixx)
+  ⏱ Alarm beendet. Dauer: 2 Sekunden
+  → ESP-NOW Alarm gesendet: nixx (31.03.2026 13:02:01, Dauer: 2s)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;2561.0;8;47.6;1.5;12.3;1027.6;46921;0;10.6;1.0;15 (Länge: 54)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.30 °C
+Luftdruck: 1027.60 hPa
+Wind: 2561.00 km/h
+Regen-Ticks: 0
+========================================
+
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;2561.0;8;47.6;1.5;12.3;1027.7;46 (Länge: 36)
+Anzahl Werte: 8
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+[DEBUG] DachSerial verfügbare Bytes: 0
+Empfangen: STX;3073.0;10;47.6;1.5;12.3;1027.6;46927;0;10.6;1.0;15 (Länge: 55)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.30 °C
+Luftdruck: 1027.60 hPa
+Wind: 3073.00 km/h
+Regen-Ticks: 0
+========================================
+
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+  ↻ Heartbeat empfangen (nixx)
+Empfangen: STX;12.0;0;47.6;1.5;12.3;1027.6;46930;0;10.6;12.0;15 (Länge: 53)
+Anzahl Werte: 12
+✓ WetterDach-Daten aktualisiert!
+✓ Wetterdaten via ESP-NOW gesendet!
+
+=== Weitergeleitete Wetter_Dach-Daten ===
+Temp: 12.30 °C
+Luftdruck: 1027.60 hPa
+Wind: 12.00 km/h
+Regen-Ticks: 0
+========================================
+
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
   ↻ Heartbeat empfangen (nixx)
