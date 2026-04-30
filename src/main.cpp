@@ -2,6 +2,7 @@
 #include <SPI.h>
 #include <WiFi.h>
 #include <esp_now.h>
+#include <esp_wifi.h>
 #include <time.h>
 
 // ============================================================
@@ -17,8 +18,12 @@
 // ============================================================
 
 // WiFi-Credentials für NTP-Zeitsynchronisation (ANPASSEN!)
-const char* ssid = "Lenovo";
-const char* password = "lenovotablet";
+//const char* ssid = "Lenovo";
+//const char* password = "lenovotablet";
+
+const char* ssid = "Glasfaser";
+const char* password = "3x3Istneun";
+
 
 // NTP-Server Konfiguration
 const char* ntpServer = "pool.ntp.org";
@@ -147,6 +152,11 @@ void setup() {
   Serial.print("Verbinde mit WiFi: ");
   Serial.println(ssid);
   WiFi.mode(WIFI_STA);
+  
+  // ESP-NOW Long Range Modus aktivieren
+  esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
+  Serial.println("✓ ESP-NOW Long Range Modus aktiviert");
+  
   WiFi.begin(ssid, password);
   
   int attempts = 0;
