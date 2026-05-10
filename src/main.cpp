@@ -3,56 +3,23 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
-#include <time.h>
 
 // ============================================================
-
 // RFM12 EMPFÄNGER + ESP-NOW SENDER
 // Frequenz: 434,15 MHz | Datenrate: 9600 bps
-// Sendet Alarmmeldungen per ESP-NOW an Wetterstation
-// Dieses Modul dient auch als Repeater:
-//Empfang und Decoding der über seriell Funk HC11 empfangenen Wetterdaten vom Dach
-// und weiterleiten über ESPNow an "Wetter_innen" Station
-//Empfang und weiterleiten der mit RFM11 emfangenen Alarmdaten mit ESPNow an "Wetter_innen" Station
-
+// Empfängt Alarmmeldungen über RFM12 und sendet sie per ESP-NOW
 // ============================================================
 
-// WiFi-Credentials für NTP-Zeitsynchronisation (ANPASSEN!)
-//const char* ssid = "Lenovo";
-//const char* password = "lenovotablet";
-
-const char* ssid = "Glasfaser";
-const char* password = "3x3Istneun";
-
-
-// NTP-Server Konfiguration
-const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = 3600;        // GMT+1 (Mitteleuropäische Zeit)
-const int daylightOffset_sec = 3600;    // Sommerzeit (+1 Stunde)
-
-// MAC-Adresse der Wetterstation (ANPASSEN!)
-//uint8_t wetterstationMAC[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-uint8_t wetterstationMAC[] = {0x14, 0x33, 0x5C, 0x38, 0xD5, 0xD4};
+// ESP-NOW Empfänger MAC-Adressen
+uint8_t receiver1MAC[] = {0xB4, 0x3A, 0x45, 0x3F, 0xB4, 0x50};  // 2USB ESP - C
+uint8_t receiver2MAC[] = {0x14, 0x33, 0x5C, 0x38, 0xD5, 0xD4};
 
 // Pin-Konfiguration
 #define RFM12_CS      5   // Chip Select (NSS)
 #define RFM12_NIRQ    4   // nIRQ Signal
 // Hardware SPI Pins: MOSI=23, MISO=19, SCK=18
 
-// Serielle Schnittstelle für WetterDach-Empfang
-#define RXD0 26   // GPIO für RX (an deinen Pins anpassen!)
-#define TXD0 27  // GPIO für TX
-
-#define HC08_SET 16  // Zur Kanal-Umschaltung (falls benötigt)
-
-#define GPS_BAUD 9600
-
-uint8_t receiverMAC[] = {0x14, 0x33, 0x5C, 0x38, 0xD5, 0xD4};
-
-HardwareSerial DachSerial(2);  // UART2 verwenden
-
 // Empfangspuffer
-char empfangsString[5];
 char collectBuffer[20];  // Buffer zum Sammeln mehrerer Interrupts
 int collectCount = 0;
 unsigned long lastReceiveTime = 0;
@@ -66,47 +33,17 @@ void rfm12_init();
 void rfm12_reset_fifo();
 
 // ESP-NOW Funktionen
-void espnow_init();
 void sendAlarmViaESPNOW(const char* alarmCode, unsigned long duration = 0);
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
 
-// Nachrichtentypen für ESP-NOW
-enum MessageType : uint8_t {
-  MSG_TYPE_ALARM = 1,   // Alarmdaten
-  MSG_TYPE_WETTER = 2   // Wetterdaten
-};
+// Vereinfachte Datenstruktur für ESP-NOW (nur Alarmdaten)
+typedef struct AlarmMessage {
+  char alarmType[5];           // "ALVO", "ALHI", "TAVO", "TAHI", "nixx", "TOUT"
+  unsigned long timestamp;     // millis() Zeitstempel
+  unsigned long alarmDuration; // Alarmdauer in Sekunden (0 wenn kein Alarm aktiv)
+} AlarmMessage;
 
-// Vereinheitlichte Datenstruktur für ESP-NOW (muss identisch mit Empfänger sein!)
-typedef struct UnifiedMessage {
-  uint8_t messageType;           // MSG_TYPE_ALARM oder MSG_TYPE_WETTER
-  
-  // Alarmdaten (nur gültig wenn messageType == MSG_TYPE_ALARM)
-  struct {
-    char alarmType[5];           // "ALVO", "ALHI", "TAVO", "TAHI", "nixx"
-    time_t timestamp;            // Unix-Timestamp (Sekunden seit 1.1.1970)
-    unsigned long alarmDuration; // Alarmdauer in Sekunden (0 wenn kein Alarm aktiv war)
-  } alarm;
-  
-  // Wetterdaten (nur gültig wenn messageType == MSG_TYPE_WETTER)
-  struct {
-    float STX;
-    float Speed;
-    float Dir;
-    float Hum;
-    float Taupunkt;
-    float Temp;
-    float Press;
-    float sectic;
-    float Regentic;
-    float bmp085;
-    float speedinv;
-    float calcCheck;
-    unsigned long timestamp;
-  } wetter;
-  
-} UnifiedMessage;
-
-UnifiedMessage espnowMsg;
+AlarmMessage espnowMsg;
 
 // Duplikats-Erkennung für Alarme
 char lastSentAlarm[5] = "----";  // Letzter gesendeter Alarm-Code
@@ -118,96 +55,65 @@ bool alarmActive = false;           // True während ein Alarm läuft
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  
-  // DachSerial initialisieren (HC-08 Modul)
-  DachSerial.begin(GPS_BAUD, SERIAL_8N1, RXD0, TXD0);
-  DachSerial.setTimeout(1000);  // Timeout für readStringUntil()
-  delay(100);
-  
-  pinMode(HC08_SET, OUTPUT);
-  digitalWrite(HC08_SET, LOW);  // AT-Modus aktivieren
-  delay(200);
-  
-  // AT-Befehl senden (Kanal 15)
-  Serial.println("Sende AT+C015 an HC-08...");
-  DachSerial.print("AT+C015\r\n");
-  delay(500);  // Warte auf Antwort
-  
-  // Buffer leeren (AT-Antwort entfernen)
-  while(DachSerial.available()) {
-    char c = DachSerial.read();
-    Serial.write(c);  // Debug: Zeige AT-Antwort
-  }
-  Serial.println();
-  
-  digitalWrite(HC08_SET, HIGH);  // Datenmodus aktivieren
-  delay(100);
 
   Serial.println("========================================");
-  Serial.println("RFM12 Empfänger + ESP-NOW + NTP");
+  Serial.println("RFM12 Empfänger + ESP-NOW Sender");
   Serial.println("Frequenz: 434,15 MHz | 9600 bps");
   Serial.println("========================================");
   
-  // WiFi verbinden für NTP-Zeitsynchronisation
-  Serial.print("Verbinde mit WiFi: ");
-  Serial.println(ssid);
+  // WiFi im STA Mode für ESP-NOW (ohne Verbindung zu Router)
   WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
   
-  // ESP-NOW Long Range Modus aktivieren
-  esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
-  Serial.println("✓ ESP-NOW Long Range Modus aktiviert");
+  Serial.print("ESP32 MAC-Adresse: ");
+  Serial.println(WiFi.macAddress());
   
-  WiFi.begin(ssid, password);
-  
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
-  
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✓ WiFi verbunden");
-    Serial.print("IP-Adresse: ");
-    Serial.println(WiFi.localIP());
-    
-    // NTP-Zeit konfigurieren
-    Serial.println("Synchronisiere Zeit mit NTP...");
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-    
-    // Warte auf Zeitsynchronisation
-    struct tm timeinfo;
-    if (getLocalTime(&timeinfo, 10000)) {
-      Serial.println("✓ Zeit synchronisiert");
-      Serial.print("Aktuelle Zeit: ");
-      Serial.println(&timeinfo, "%d.%m.%Y %H:%M:%S");
-    } else {
-      Serial.println("⚠ Zeitsynchronisation fehlgeschlagen!");
-    }
-  } else {
-    Serial.println("\n⚠ WiFi-Verbindung fehlgeschlagen! Zeit nicht synchronisiert.");
-  }
-  
-  // ESP-NOW initialisieren (WiFi bleibt verbunden)
+  // ESP-NOW initialisieren
   if (esp_now_init() != ESP_OK) {
     Serial.println("ESP-NOW Init Fehler!");
     return;
   }
   Serial.println("✓ ESP-NOW initialisiert");
   
-  // Peer (Empfänger) registrieren
-  esp_now_peer_info_t peerInfo;
-  memset(&peerInfo, 0, sizeof(peerInfo));
-  memcpy(peerInfo.peer_addr, receiverMAC, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
-  peerInfo.ifidx = WIFI_IF_STA;
+  // Callback für Sendebestätigung
+  esp_now_register_send_cb(OnDataSent);
   
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("Fehler beim Hinzufügen des Peers!");
+  // Empfänger 1 hinzufügen
+  esp_now_peer_info_t peerInfo1;
+  memset(&peerInfo1, 0, sizeof(peerInfo1));
+  memcpy(peerInfo1.peer_addr, receiver1MAC, 6);
+  peerInfo1.channel = 0;  // 0 = aktueller Kanal
+  peerInfo1.encrypt = false;
+  
+  if (esp_now_add_peer(&peerInfo1) != ESP_OK) {
+    Serial.println("Fehler beim Hinzufügen von Empfänger 1!");
     return;
   }
-  Serial.println("✓ ESP-NOW Sender bereit!");
+  Serial.print("✓ Empfänger 1 hinzugefügt: ");
+  for (int i = 0; i < 6; i++) {
+    Serial.printf("%02X", receiver1MAC[i]);
+    if (i < 5) Serial.print(":");
+  }
+  Serial.println();
+  
+  // Empfänger 2 hinzufügen
+  esp_now_peer_info_t peerInfo2;
+  memset(&peerInfo2, 0, sizeof(peerInfo2));
+  memcpy(peerInfo2.peer_addr, receiver2MAC, 6);
+  peerInfo2.channel = 0;  // 0 = aktueller Kanal
+  peerInfo2.encrypt = false;
+  
+  if (esp_now_add_peer(&peerInfo2) != ESP_OK) {
+    Serial.println("Fehler beim Hinzufügen von Empfänger 2!");
+    return;
+  }
+  Serial.print("✓ Empfänger 2 hinzugefügt: ");
+  for (int i = 0; i < 6; i++) {
+    Serial.printf("%02X", receiver2MAC[i]);
+    if (i < 5) Serial.print(":");
+  }
+  Serial.println();
   
   // SPI initialisieren
   SPI.begin();  // SCK=18, MISO=19, MOSI=23
@@ -240,140 +146,12 @@ void setup() {
   // Initialisiere Heartbeat-Timer
   lastValidMessageTime = millis();
   
-  Serial.println("✓ Bereit! Warte auf Daten...");
+  Serial.println("✓ Bereit! Warte auf RFM12-Daten...");
   Serial.println("  Heartbeat-Überwachung aktiv (Timeout: 5s)");
   Serial.println();
 }
 
 void loop() {
-  
-  // Debug: Periodischer Status der seriellen Verbindung
-  static unsigned long lastDebugTime = 0;
-  if (millis() - lastDebugTime > 10000) {  // Alle 10 Sekunden
-    int avail = DachSerial.available();
-    Serial.print("[DEBUG] DachSerial verfügbare Bytes: ");
-    Serial.println(avail);
-    
-    // Zeige Raw-Bytes falls vorhanden
-    if (avail > 0) {
-      Serial.print("  Raw-Bytes (erste 50): ");
-      int bytesToRead = min(avail, 50);
-      for (int i = 0; i < bytesToRead; i++) {
-        int b = DachSerial.read();
-        if (b >= 32 && b <= 126) {
-          Serial.write(b);  // Druckbares Zeichen
-        } else {
-          Serial.printf("[0x%02X]", b);  // Hex-Darstellung
-        }
-      }
-      Serial.println();
-    }
-    
-    lastDebugTime = millis();
-  }
-  
-  // WetterDach-Daten empfangen und weiterleiten
-  if (DachSerial.available()) {
-    String Wetterdaten = DachSerial.readStringUntil('\n');
-    Serial.print("Empfangen: ");
-    Serial.print(Wetterdaten);
-    
-    int length = Wetterdaten.length();
-    Serial.print(" (Länge: ");
-    Serial.print(length);
-    Serial.println(")");
-    
-    // Parse Wetterdaten in Float-Array
-    float wetterArray[20];
-    int arrayIndex = 0;
-    int startPos = 0;
-    
-    // Durchlaufe den String und trenne an Semikolons
-    for (int i = 0; i <= Wetterdaten.length() && arrayIndex < 20; i++) {
-      if (i == Wetterdaten.length() || Wetterdaten.charAt(i) == ';') {
-        String valueStr = Wetterdaten.substring(startPos, i);
-        wetterArray[arrayIndex] = valueStr.toFloat();
-        arrayIndex++;
-        startPos = i + 1;
-      }
-    }
-    
-    Serial.print("Anzahl Werte: ");
-    Serial.println(arrayIndex);
-    
-    // Aktualisiere Wetterdaten in vereinheitlichter Struktur
-    if(arrayIndex >= 12) {
-      espnowMsg.messageType = MSG_TYPE_WETTER;
-      espnowMsg.wetter.STX = wetterArray[0];
-      espnowMsg.wetter.Speed = wetterArray[1];
-      espnowMsg.wetter.Dir = wetterArray[2];
-      espnowMsg.wetter.Hum = wetterArray[3];
-      espnowMsg.wetter.Taupunkt = wetterArray[4];
-      espnowMsg.wetter.Temp = wetterArray[5];
-      espnowMsg.wetter.Press = wetterArray[6];
-      espnowMsg.wetter.sectic = wetterArray[7];
-      espnowMsg.wetter.Regentic = wetterArray[8];
-      espnowMsg.wetter.bmp085 = wetterArray[9];
-      espnowMsg.wetter.speedinv = wetterArray[10];
-      espnowMsg.wetter.calcCheck = wetterArray[11];
-      espnowMsg.wetter.timestamp = millis();
-      
-      Serial.println("✓ WetterDach-Daten aktualisiert!");
-      
-      // *** Weiterleitung via ESP-NOW ***
-      esp_err_t result = esp_now_send(receiverMAC, (uint8_t *)&espnowMsg, sizeof(espnowMsg));
-      
-      if (result == ESP_OK) {
-        Serial.println("✓ Wetterdaten via ESP-NOW gesendet!");
-      } else {
-        Serial.println("✗ ESP-NOW Sendefehler!");
-      }
-      
-      // Debug-Ausgabe
-      Serial.println("\n=== Weitergeleitete Wetter_Dach-Daten ===");
-      Serial.printf("Temp: %.2f °C\n", espnowMsg.wetter.Temp);
-      Serial.printf("Luftdruck: %.2f hPa\n", espnowMsg.wetter.Press);
-      Serial.printf("Wind: %.2f km/h\n", espnowMsg.wetter.Speed);
-      Serial.printf("Regen-Ticks: %.0f\n", espnowMsg.wetter.Regentic);
-      Serial.println("========================================\n");
-    }
-  }
-  
-  // Mitternachts-Reset für sectic-Zähler
-  static int lastResetDay = -1;
-  struct tm timeinfo;
-  
-  if(getLocalTime(&timeinfo)) {
-    if(timeinfo.tm_hour == 0 && timeinfo.tm_min == 0 && timeinfo.tm_mday != lastResetDay) {
-      Serial.println("\n=== Mitternachts-Reset wird ausgeführt ===");
-      Serial.println("Sende 0x1E an DachSerial (2x mit 2 Sekunden Pause)...");
-      
-      // Ersten Reset senden
-      DachSerial.write(0x1E);
-      Serial.println("Erste 0x1E gesendet");
-      delay(2000);
-      
-      // Zweiten Reset senden
-      DachSerial.write(0x1E);
-      Serial.println("Zweite 0x1E gesendet");
-      delay(3000);
-      
-      // Prüfe ob sectic auf 0 zurückgesetzt wurde
-      Serial.print("Prüfe sectic-Wert: ");
-      Serial.println(espnowMsg.wetter.sectic, 0);
-      
-      if(espnowMsg.wetter.sectic == 0) {
-        Serial.println("✓ sectic erfolgreich auf 0 zurückgesetzt!");
-      } else {
-        Serial.print("✗ Warnung: sectic ist nicht 0, aktueller Wert: ");
-        Serial.println(espnowMsg.wetter.sectic, 0);
-      }
-      
-      lastResetDay = timeinfo.tm_mday;
-      Serial.println("=== Mitternachts-Reset abgeschlossen ===\n");
-    }
-  }
-  
   
   // nIRQ prüfen - LOW bedeutet Interrupt (Daten bereit)
   if (digitalRead(RFM12_NIRQ) == LOW) {
@@ -382,7 +160,7 @@ void loop() {
     bool ffit = (status & 0x8000) != 0;  // FIFO hat Daten
     
     if (ffit) {
-      // Lese bis zu 10 Bytes (nicht mehr 20)
+      // Lese bis zu 10 Bytes
       int bytesRead = 0;
       while (collectCount < 20 && bytesRead < 10) {
         status = rfm12_trans(0x0000);
@@ -390,7 +168,7 @@ void loop() {
           uint16_t data = rfm12_trans(0xB000);
           collectBuffer[collectCount++] = (uint8_t)(data & 0xFF);
           bytesRead++;
-          delayMicroseconds(200);  // Erhöht auf 200us
+          delayMicroseconds(200);
         } else {
           break;  // FIFO leer
         }
@@ -405,16 +183,13 @@ void loop() {
         rfm12_reset_fifo();
         rfm12_trans(0x82D9);  // Enable Receiver
       }
-      
-      // FIFO reset nur wenn wir fertig sind (nach Timeout)
-      // NICHT sofort nach jedem Interrupt!
     }
   }
   
   // Wenn 50ms nichts mehr kam UND mindestens 4 Bytes vorhanden, verarbeite Daten
   if (collectCount >= 4 && (millis() - lastReceiveTime) > 50) {
     
-    // Suche nach bekannten 4-Byte Mustern im GESAMTEN Buffer (nicht nur an 4-Byte Grenzen!)
+    // Suche nach bekannten 4-Byte Mustern im GESAMTEN Buffer
     bool alarmFound = false;
     bool heartbeatFound = false;
     char alarmCode[5] = {0};
@@ -442,7 +217,6 @@ void loop() {
           // Sende "nixx" mit Alarmdauer
           memcpy(alarmCode, "nixx", 4);
           alarmCode[4] = '\0';
-          patternPosition = i;
           
           // Per ESP-NOW senden (mit Dauer)
           sendAlarmViaESPNOW(alarmCode, alarmDuration);
@@ -495,7 +269,7 @@ void loop() {
           Serial.println("  ⏱ Alarm-Timer gestartet");
         }
         
-        // Per ESP-NOW an Wetterstation senden (ohne Dauer, da Alarm läuft)
+        // Per ESP-NOW senden (ohne Dauer, da Alarm läuft)
         sendAlarmViaESPNOW(alarmCode, 0);
         break;  // Nur erstes Muster
       }
@@ -606,42 +380,13 @@ void rfm12_reset_fifo() {
 // ============================================================
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  Serial.print("ESP-NOW Sendestatus: ");
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Erfolg" : "Fehler");
-}
-
-void espnow_init() {
-  // WiFi ist bereits im Station Mode und verbunden (für NTP)
-  Serial.print("ESP32 MAC-Adresse: ");
-  Serial.println(WiFi.macAddress());
-  
-  // ESP-NOW initialisieren
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("ESP-NOW Init fehlgeschlagen!");
-    return;
-  }
-  Serial.println("✓ ESP-NOW initialisiert");
-  
-  // Callback für Sendebestätigung
-  esp_now_register_send_cb(OnDataSent);
-  
-  // Wetterstation als Peer hinzufügen
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(peerInfo.peer_addr, wetterstationMAC, 6);
-  peerInfo.channel = 0;  // Auto-Channel
-  peerInfo.encrypt = false;
-  
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("Fehler beim Hinzufügen der Wetterstation!");
-    return;
-  }
-  
-  Serial.print("✓ Wetterstation hinzugefügt: ");
+  Serial.print("  -> Gesendet an ");
   for (int i = 0; i < 6; i++) {
-    Serial.printf("%02X", wetterstationMAC[i]);
+    Serial.printf("%02X", mac_addr[i]);
     if (i < 5) Serial.print(":");
   }
-  Serial.println();
+  Serial.print(" - Status: ");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Erfolg" : "Fehler");
 }
 
 void sendAlarmViaESPNOW(const char* alarmCode, unsigned long duration) {
@@ -657,38 +402,42 @@ void sendAlarmViaESPNOW(const char* alarmCode, unsigned long duration) {
   }
   
   // Nachricht vorbereiten
-  espnowMsg.messageType = MSG_TYPE_ALARM;
-  strncpy(espnowMsg.alarm.alarmType, alarmCode, 4);
-  espnowMsg.alarm.alarmType[4] = '\0';
-  espnowMsg.alarm.timestamp = time(nullptr);  // Unix-Timestamp
-  espnowMsg.alarm.alarmDuration = duration;   // Alarmdauer in Sekunden
+  strncpy(espnowMsg.alarmType, alarmCode, 4);
+  espnowMsg.alarmType[4] = '\0';
+  espnowMsg.timestamp = millis();
+  espnowMsg.alarmDuration = duration;
   
   // Speichere als "letzter gesendeter Alarm"
   strncpy(lastSentAlarm, alarmCode, 5);
   
-  // Per ESP-NOW senden
-  esp_err_t result = esp_now_send(wetterstationMAC, (uint8_t *) &espnowMsg, sizeof(espnowMsg));
+  // Serial Monitor Ausgabe
+  Serial.print("\n=== ALARM SENDEN: ");
+  Serial.print(espnowMsg.alarmType);
+  Serial.println(" ===");
+  Serial.print("Zeitstempel: ");
+  Serial.print(espnowMsg.timestamp);
+  Serial.println(" ms");
   
-  if (result == ESP_OK) {
-    Serial.print("  → ESP-NOW Alarm gesendet: ");
-    Serial.print(espnowMsg.alarm.alarmType);
-    
-    // Zeit lesbar formatieren
-    struct tm* timeinfo = localtime(&espnowMsg.alarm.timestamp);
-    char timeStr[25];
-    strftime(timeStr, sizeof(timeStr), "%d.%m.%Y %H:%M:%S", timeinfo);
-    
-    Serial.print(" (");
-    Serial.print(timeStr);
-    
-    if (duration > 0) {
-      Serial.print(", Dauer: ");
-      Serial.print(duration);
-      Serial.print("s");
-    }
-    
-    Serial.println(")");
-  } else {
-    Serial.println("  → ESP-NOW Sendefehler!");
+  if (duration > 0) {
+    Serial.print("Alarmdauer: ");
+    Serial.print(duration);
+    Serial.println(" Sekunden");
   }
+  
+  // An beide Empfänger senden
+  Serial.println("\nSende per ESP-NOW...");
+  
+  esp_err_t result1 = esp_now_send(receiver1MAC, (uint8_t *)&espnowMsg, sizeof(espnowMsg));
+  if (result1 != ESP_OK) {
+    Serial.println("  ✗ Sendefehler an Empfänger 1!");
+  }
+  
+  delay(10);  // Kurze Pause zwischen Sendungen
+  
+  esp_err_t result2 = esp_now_send(receiver2MAC, (uint8_t *)&espnowMsg, sizeof(espnowMsg));
+  if (result2 != ESP_OK) {
+    Serial.println("  ✗ Sendefehler an Empfänger 2!");
+  }
+  
+  Serial.println("========================================\n");
 }
